@@ -77,7 +77,7 @@ spatial_check.add_interaction(spatial_hole)
 stream = rospy.get_param('/lidar/stream')
 bag_filename = rospy.get_param('/lidar/bag_filename')
 
-bag_filename = "/home/elechim/Documents/D435/car_front_movement_1.bag"
+# bag_filename = "/home/elechim/Documents/D435/car_front_movement_1.bag"
 
 
 #===============================#
