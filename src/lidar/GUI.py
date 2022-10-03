@@ -24,16 +24,17 @@ class GUI:
 		self.root.resizable(FALSE, FALSE)
 		self.height = 0
 		self.root.title(window_name)
-		self.GUI_instances = 0
 		self.dict = {'int':IntVar, 'string':StringVar, 'float':DoubleVar}
 		self.interactions = {}
+		self.pipeline = None
+		self.interfaces = []
 
 	#Element creation functions
 	def create_slider(self, name, var_type, from_, to, increment, def_val = None):
 
 		return GUI.Slider(self, name, var_type, from_, to, increment, def_val)
 
-	def add_play_button(self):
+	def add_play_button(self):		
 
 		return GUI.PlayButton(self)
 
@@ -45,15 +46,43 @@ class GUI:
 
 		return GUI.CheckButton(self, label, on)
 
-	#Function that updates the geometry of the window; it gets called in every subclass __init__()
-	def update_geometry(self, offset = 70):
+	def add_button(self, text):
 
-		height = self.GUI_instances * offset
-		self.height += offset
-		self.root.geometry('160x'+str(self.height))
+		return GUI.Button(self, text)
+
+	def add_spinbox(self, var, from_, to, increment, def_val = None):
+
+		return GUI.Spinbox(self, var, from_, to, increment, def_val)
+
+
+	def PipelineICP(self):
+
+		self.pipeline = GUI.Pipeline_ICP(self)
+		return self.pipeline
+
+
+	#Function that updates the geometry of the window; it gets called in every subclass __init__()
+	def update_geometry(self, offset):
+	
+
+		if self.pipeline is None:
+			self.height += offset
+			self.root.geometry('160x'+str(self.height))
+
+		else:
+
+			self.height += offset
+			total = self.height + self.pipeline.height
+			self.root.geometry(str(self.pipeline.width)+'x'+str(total))
 
 	#Simple function to enable/disable sliders given the checkboxes values
 	def handle_interactions(self):
+
+		if len(self.interfaces) >0:
+
+			for el in self.interfaces:
+
+				el.update()
 
 		if len(self.interactions) > 0:
 
@@ -61,7 +90,8 @@ class GUI:
 
 				values = self.interactions[key]
 
-				for value in values:
+				for value in values:	
+
 
 					if key.var.get():
 
@@ -70,14 +100,13 @@ class GUI:
 					else:
 
 						value.scale.config(state = DISABLED, sliderrelief = FLAT)
-
+	
 
 	#Updates GUI if ROS is running
 	def tk_routine(self):
 
+		if __name__ == '__main__':
 
-
-		if not rospy.is_shutdown():
 
 			self.handle_interactions()
 			self.root.update_idletasks()
@@ -85,7 +114,15 @@ class GUI:
 
 		else:
 
-			exit()
+			if not rospy.is_shutdown():
+
+				self.handle_interactions()
+				self.root.update_idletasks()
+				self.root.update()
+
+			else:
+
+				exit()
 
 	#Slider class definition; 
 	class Slider:
@@ -93,7 +130,6 @@ class GUI:
 		def __init__(self, parent,  name, var_type, from_, to, increment, def_val):	
 
 			self.var = parent.dict[var_type]()
-			parent.GUI_instances += 1
 			self.scale = Scale(parent.root, 
 				variable = self.var, 
 				resolution = increment, 
@@ -102,12 +138,12 @@ class GUI:
 				orient = HORIZONTAL,
 				label = name)
 			
-
+			#Set default value on init
 			if def_val is not None:
 				self.var.set(def_val)
-				
-			self.scale.pack()
 
+						
+			self.scale.pack()
 			parent.update_geometry(offset = 62)
 
 	#PlayButton class definition
@@ -118,7 +154,6 @@ class GUI:
 			self.button = Button(parent.root, 
 				command = self.press,
 				text = "Pause",)
-			parent.GUI_instances +=1
 			self.play = True
 			self.button.pack()
 
@@ -159,14 +194,19 @@ class GUI:
 
 			self.var = IntVar()
 			self.interactions = []
-			self.check = Checkbutton(parent.root, variable = self.var, text = label)
+			self.GUI_element = Checkbutton(parent.root, variable = self.var, text = label)
 			self.parent = parent
 
+			#Set default value on init
 			if on:
 
 				self.var.set(1)
 
-			self.check.pack()
+			else:
+
+				self.var.set(0)
+
+			self.GUI_element.pack()
 			parent.update_geometry(offset = 25)
 
 		#Add interaction between Sliders and Checkboxes; updates the GUI class dict
@@ -182,11 +222,97 @@ class GUI:
 
 			self.parent.interactions.update({self:self.interactions})
 
+		#Check value method
+		def check(self):
 
+			return (self.var.get()==1)
+
+			
+	#Generic Button class definition
+	class Button:
+
+		def __init__(self, parent, text):
+
+			self.button = Button(parent.root, text = text)
+
+			self.button.pack()
+			parent.update_geometry(offset = 25)
+
+		#Assign function to the button
+		def add_command(self, function):
+
+			self.button.config(command = function)
+
+
+	#Spinbox class definition
+	class Spinbox:
+
+		def __init__(self, parent, var, from_, to, increment, def_val):
+
+			self.var = parent.dict[var]()
+			self.spinbox = Spinbox(parent.root, 
+				from_ = from_, 
+				to = to, 
+				increment = increment, 
+				textvariable = self.var)
+
+			#Assign defualt value
+			if def_val is not None:
+
+				self.var.set(def_val)
+
+			self.spinbox.pack()
+			parent.update_geometry(offset = 30)
+
+
+
+	#WIP
+	#PipelineICP class; not yet fully implemented
+	class Pipeline_ICP:
+
+		def __init__(self, parent):
+
+
+			self.parent = parent
+			# parent.root.geometry('200x'+str(parent.height+50))
+			self.pipelines = ['Colored ICP', 'Point to Plane', 'Point to Point']
+			self.height = 50
+			self.width = 200
+			self.choice = StringVar()
+			self.choice.set(self.pipelines[0])
+			self.option = OptionMenu(parent.root, self.choice, *self.pipelines).place(x = 5, y = parent.height + 10)
+			self.add_button = Button(parent.root, text = 'Add').place(x = 140, y = parent.height + 11)
+			parent.update_geometry(0)
 
 
 
 
 
 	
+if __name__ == '__main__':
+   
 
+	GUI = GUI('Debug')
+	GUI.add_button('text')
+	GUI.add_button('text')
+	GUI.add_button('text')
+	# GUI.add_spacer(True)
+
+	pipeline = GUI.PipelineICP()
+
+	GUI.add_button('text')
+
+
+
+	# filt = GUI.FilterInterface('Filter', True)
+
+	# filt.create_slider('Decimate', 'int', 2,8,1, def_val = 6)
+	# filt.create_slider('Decimate 2', 'int', 2,8,1, def_val = 6)
+
+
+
+
+	while True:
+
+
+		GUI.tk_routine()

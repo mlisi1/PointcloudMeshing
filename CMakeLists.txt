@@ -161,8 +161,8 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS  
     scripts/streamer.py
-#     scripts/GUI.py
-    scripts/canny.py
+    scripts/registration.py
+#     scripts/mesh.py
 #     scripts/rs2_stream.py
 #   scripts/utils/__init__.py
 #   setup.py

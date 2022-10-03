@@ -7,14 +7,66 @@
 # Utility library mostly containing custom conversion functions or pointcloud processing
 #------------------------------------------------------------------------------------------------------
 import open3d as o3d
-from sensor_msgs.msg import CameraInfo, PointCloud2, PointField
+from sensor_msgs.msg import CameraInfo, PointCloud2, PointField, Imu
+from geometry_msgs.msg import Vector3
 import numpy as np
 import rospy
-import ros_numpy.point_cloud2 as rnp
 import random
 import pyrealsense2 as rs2
+from scipy.integrate import cumtrapz
 from open3d_ros_helper import open3d_ros_helper as o3dh
 import cv2
+
+#===================#
+#   get_IMU_msg     #
+#===================#
+#
+# Gets IMU data from the realsense frame and casts it to ROS IMU message.
+#
+#-------------------------------------------------------------------------
+def get_IMU_msg(frames):
+
+    #Initialize messages
+    accel = Vector3()
+    gyro = Vector3()
+    msg = Imu()
+
+    #For every frame
+    for frame in frames:
+
+        #Find motion frame
+        if frame.is_motion_frame():
+
+            #Get IMU data
+            motion = frame.as_motion_frame()
+            profile = motion.get_profile()
+            data = motion.get_motion_data()
+
+            #Update Gyro data
+            if profile.stream_name() == 'Gyro':
+                
+                gyro.x = data.x
+                gyro.y = data.y
+                gyro.z = data.z
+                
+            #Update Accel data
+            if profile.stream_name() == 'Accel':
+
+                accel.x = data.x
+                accel.y = data.y
+                accel.z = data.z
+
+    #Assign fields
+    msg.angular_velocity = gyro
+    msg.linear_acceleration = accel
+    msg.header.frame_id = 'map'
+
+    return msg
+
+
+
+
+
 
 #===========================================#
 #   uv_to_rgb(texture_coordinate, texture)  #
@@ -69,6 +121,7 @@ def publish_single_point():
     msg = PointCloud2()
     msg.header.frame_id = "map"
     step = arr[0].nbytes 
+    
     msg.fields = [
             PointField('x', 0, PointField.FLOAT32, 1),
             PointField('y', step, PointField.FLOAT32, 1),
@@ -164,7 +217,7 @@ def subscribe_pointcloud(msg):
 # arguments are, respectively, a RealSense pointcloud, treated as frameset, and the color image
 # the former pointcloud has been mapped to, resized to the depth image size.
 #.#-------------------------------------------------------------------------------------------------
-def publish_points_cloud(frame, color_image):
+def publish_points_cloud(frame, color_image, time):
 
 
         # no_color = [255, 0, 0]
@@ -199,6 +252,7 @@ def publish_points_cloud(frame, color_image):
         #Message creation
         msg = PointCloud2()
         msg.header.frame_id = 'map'
+        msg.header.seq = int(time)
         msg.height = 1
         msg.width = len(data)
         step = data[0][0].nbytes  
