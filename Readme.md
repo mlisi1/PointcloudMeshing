@@ -72,29 +72,29 @@ Then the transformations in the ```PoseGraph``` are applied to the pointclouds i
 - Added color, depth and ir streaming
 - Added pointcloud streaming on /kinect/points
 
-* ## registration.py:
+* ### registration.py:
 - Added outlier filtering option before PoseGraph computation
 - Added non finite points filtering (Kinect gives error without filtering)
 - Now during buffer filling, fragments are sent to /computed/points
 - Save function added
 - When started now the node automatically subscribes to either /kinect/points or /camera/points
 
-* ## noise_analyzer.py:
+* ### noise_analyzer.py:
 - Added node
 - Node automatically check which topic to subscribe (either realsense or kinect)
 - The isolated section is sent to /square/points
 
-* ## realsense_libs:
+* ### realsense_libs:
 - Changed libraries name from streamer_libs to realsense_libs 
 - Added filters pipeline function 
 
-* ## kinect_libs:
+* ### kinect_libs:
 - Added library
 - Added custom Queue for frame listener
 - Added function that handles frames
 - Added function that casts from points array and image to open3d PointCloud
 
-* ## icp:
+* ### icp:
 - Added outliers filtering function
 
 
