@@ -1,0 +1,13 @@
+<launch>
+
+    
+    <node name="kinect_streamer" pkg="pc_meshing" type="kinect_streamer.py">
+        
+     
+    </node>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find pc_meshing)/rviz/kinect.rviz" required="true" />
+
+
+    
+</launch>

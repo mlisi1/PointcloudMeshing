@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(lidar)
+project(pc_meshing)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -10,6 +10,7 @@ project(lidar)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
+  rosbag
   std_msgs
 )
 
@@ -160,12 +161,10 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS  
-    scripts/streamer.py
+    scripts/realsense_streamer.py
     scripts/registration.py
-#     scripts/mesh.py
-#     scripts/rs2_stream.py
-#   scripts/utils/__init__.py
-#   setup.py
+    scripts/kinect_streamer.py
+    scripts/noise_analyzer.py
 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 ## Mark executables for installation

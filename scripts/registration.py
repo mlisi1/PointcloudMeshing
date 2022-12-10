@@ -13,16 +13,18 @@
 #------------------------------------------------------------------------------------------------------
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
-from lidar.GUI import GUI
+from pc_meshing.GUI import GUI
 import numpy as np
 from open3d_ros_helper import open3d_ros_helper as o3dh
-from lidar.icp import *
-from lidar.shared_libs import rospc_to_o3dpc
+from pc_meshing.icp import *
+from pc_meshing.shared_libs import *
 import time
+from tqdm import tqdm
 
 
 #GUI initialization
 GUI_handler = GUI("Registration")
+filter_out = GUI_handler.add_checkbutton('Filter Outliers:', False)
 buffer = GUI_handler.add_spinbox('int', 1, 20, 1, 5)
 start = GUI_handler.add_button('Start Registration')
 GUI_handler.add_spacer()
@@ -31,10 +33,10 @@ color = GUI_handler.add_checkbutton('Random Colors', False)
 voxel = GUI_handler.add_spinbox('float', 0.001, 5.0, 0.005, 0.05)
 compute = GUI_handler.add_button('Compute Registration')
 GUI_handler.add_spacer()
-mesh = GUI_handler.add_button('Mesh')
+save = GUI_handler.add_button('Save')
 GUI_handler.add_spacer(True)
 reset = GUI_handler.add_button('Reset Buffer')
-
+GUI_handler.add_spacer(True)
 
 
 
@@ -57,6 +59,7 @@ class PointCloud:
 		self.tr = []
 		self.result = None
 		self.pc_pub = rospy.Publisher('/computed/points', PointCloud2, queue_size = 10)
+		self.already_filtered = False
 
 	#Enable ROS subscriber callback to store the frames
 	def enable_callback(self):
@@ -79,7 +82,18 @@ class PointCloud:
 
 			if len(self.buffer) < self.buffer_len:
 
-				self.buffer.append(rospc_to_o3dpc(msg))
+				pcd = rospc_to_o3dpc(msg)
+
+				pcd = pcd.remove_non_finite_points()
+
+				# o3d.visualization.draw(pcd)
+
+				back = o3dh.o3dpc_to_rospc(pcd, frame_id = 'map')
+
+				self.pc_pub.publish(back)
+
+
+				self.buffer.append(pcd)
 
 			else:
 
@@ -95,6 +109,7 @@ class PointCloud:
 		self.enable = False
 		self.tr = []
 		self.result = None
+		self.already_filtered = False
 
 
 	#Applies RANSAC and ICP registration; much slower than multiway registration and thus not used anymore
@@ -119,6 +134,9 @@ class PointCloud:
 
 			self.result = transform(self.buffer, self.tr)
 
+
+			# self.result = self.result.voxel_down_sample(0.5)
+
 			end = time.time()
 
 			rospy.logwarn('::Computation Finished::')
@@ -130,9 +148,22 @@ class PointCloud:
 
 		if not self.enable:
 
+
+			if filter_out.check() and not self.already_filtered:
+
+				rospy.logwarn('::Filtering Outliers::')
+				for i in tqdm(range(len(self.buffer))):
+
+					pcd, _ = remove_outlier(self.buffer[i])
+					self.buffer[i] = pcd
+
+				self.already_filtered = True
+
+
 			#compute posegraph
 			rospy.logwarn('::Calculating posegraph::')
 			pose_graph = multiway_registration(self.buffer, voxel.var.get())
+
 
 			
 			if (fine.var.get() == 1):
@@ -142,7 +173,9 @@ class PointCloud:
 				optimize_posegraph(pose_graph, voxel.var.get())
 
 			#Merge the resulting pointclouds
-			self.result = merge(self.buffer, pose_graph, (color.var.get()==1))
+			self.result = merge(self.buffer, pose_graph, color.check())
+
+			self.result = self.result.voxel_down_sample(0.02)
 			rospy.logwarn('::===Completed!===::')
 
 		
@@ -157,51 +190,13 @@ class PointCloud:
 			self.pc_pub.publish(msg)
 
 
-	# WIP
-	# Function used to create the Triangular Mesh from the pointcloud; not yet fully implemented
-	def to_3d(self):
-		
-		if self.result is not None:
-
-			#downsample the pcd
-			# value = voxel.var.get()
-			self.result = self.result.voxel_down_sample(0.01)
-
-			if not self.result.has_normals():
-
-				self.result.estimate_normals()
-				self.result.orient_normals_towards_camera_location()
-
-			# mesh = self.result.compute_convex_hull()
-
-
-			distances = self.result.compute_nearest_neighbor_distance()
-			avg_dist = np.mean(distances)
-			value = avg_dist 
-			radii = [value, value*2]#, value*4, value*8]
-
-			mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(self.result, o3d.utility.DoubleVector(radii))
-			# mesh = mesh.filter_smooth_simple(number_of_iterations=2)
-
-			mesh = mesh.filter_smooth_laplacian(2)
-
-
-			dec_mesh = mesh.simplify_quadric_decimation(100000)
-
-			dec_mesh = dec_mesh.remove_degenerate_triangles()
-			dec_mesh = dec_mesh.remove_duplicated_triangles()
-			dec_mesh = dec_mesh.remove_duplicated_vertices()
-			dec_mesh = dec_mesh.remove_non_manifold_edges()
-
-
-			o3d.visualization.draw(dec_mesh)
 
 	#Saving function for debugging purposes
 	def save(self):
 
 		if self.result is not None:
 
-			o3d.io.write_point_cloud('/home/elechim/Documents/car.ply', self.result)
+			o3d.io.write_point_cloud('/home/elechim/Documents/pc.ply', self.result)
 
 
 
@@ -215,15 +210,19 @@ def main():
 	#Add commands to the GUI buttons
 	start.add_command(pc.enable_callback)
 	compute.add_command(pc.compute_multiway)
-	mesh.add_command(pc.to_3d)
+	save.add_command(pc.save)
 	reset.add_command(pc.reset)
 
 	#Initialize node and assign subcriber callback
 	rospy.init_node('registration', anonymous = False)
-	pc_sub = rospy.Subscriber('/camera/points', PointCloud2, pc.pc_callback)
+	if (check_for_node('/realsense_streamer')):
+		pc_sub = rospy.Subscriber('/camera/points', PointCloud2, pc.pc_callback)
+
+	if (check_for_node('/kinect_streamer')):
+		pc_sub = rospy.Subscriber('/kinect/points', PointCloud2, pc.pc_callback)
 
 	#10 fps
-	rate = rospy.Rate(10)
+	rate = rospy.Rate(30)
 
 
 	while not rospy.is_shutdown():

@@ -1,0 +1,17 @@
+<launch>
+
+    <arg name="stream" default="false" />
+    <arg name="bag_filename" default="" />
+
+
+    <node name="realsense_streamer" pkg="pc_meshing" type="realsense_streamer.py">
+        <param name="stream" value="$(arg stream)" />
+        <param name="bag_filename" value="$(arg bag_filename)" />
+     
+    </node>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find pc_meshing)/rviz/realsense.rviz" required="true" />
+
+
+    
+</launch>
